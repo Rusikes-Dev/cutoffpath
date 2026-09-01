@@ -19,8 +19,11 @@ site/                     everything served to the browser
   assets/style.css
   assets/app.js
   colleges/*.html         386 college pages, one per college
+  assets/theme.js         dark / light toggle, shared by every page
+  assets/college.js       the cutoff tables on a college page
   data/meta.json          colleges, branches, seat types, universities
-  data/shards/*.json      cutoffs split by category
+  data/shards/*.json      cutoffs split by category (used by the finder)
+  data/colleges/*.json    one file per college, ~6 KB (used by college pages)
 
 api/                      Vercel serverless functions (no npm packages)
   _lib.js                 Supabase + Razorpay helpers
@@ -42,6 +45,7 @@ tools/
   college_template.html         the template those pages come from
   verify_matching.mjs           checks the eligibility logic
   test_ui.mjs                   drives the whole UI in jsdom
+  test_college_page.mjs         drives a college page's cutoff tables
 
 vercel.json, package.json, .env.example
 ```
@@ -135,12 +139,72 @@ At `/admin`. It shows:
 - What categories and genders people are actually searching for
 - A live feed of the last 60 events
 
+### Free mode
+
+At the top of the panel is an **Access mode** switch.
+
+- **Paid** (the default) — students hit the ₹49 wall before results.
+- **Free** — the finder opens for everyone, no payment, no email needed.
+
+The switch writes to a `settings` row in Supabase, so it applies to every visitor
+immediately, on every device. Nothing is cached client-side. It is useful on
+launch day, during results week, or if Razorpay has an outage and you would
+rather stay useful than stay paid.
+
+If the `settings` table is missing — say you deployed before running the newer
+`schema.sql` — the site falls back to **paid**. A half-finished setup never gives
+the tool away by accident.
+
+The price itself comes from `PRICE_PAISE` and is read by the browser at load, so
+changing that one variable updates the paywall, the button and the hint together.
+
+
 The page is marked `noindex` and the API rejects any request without a valid
 signed session, but the URL is still guessable — so use a real password.
 
 ---
 
-## 6. Editing the college pages
+## 6. Dark mode
+
+Every page has a sun/moon button in the top bar. The choice is stored per
+browser. On a first visit the site follows the device setting, so a student whose
+phone is in dark mode sees dark mode straight away.
+
+The theme is applied by a tiny inline script in each page's `<head>`, before
+anything paints, so there is no white flash on load. The colours live as CSS
+variables in `assets/style.css` — the `[data-theme="dark"]` block near the top is
+the whole palette, so you can retune it in one place.
+
+---
+
+## 7. The college cutoff tables
+
+Each college page now carries the full cutoff picture, not just Open seats.
+
+Two dropdowns drive one table:
+
+| Branch | Category | You get |
+|---|---|---|
+| All branches | one category | every branch, for that category |
+| one branch | All categories | every category, for that branch |
+| one branch | one category | just that combination |
+
+A switch under the dropdowns flips the cells between closing percentile and
+closing merit rank.
+
+Only the seat types that college actually used appear in the dropdown, grouped as
+General, Ladies, Special, PWD and Defence, with plain labels — "OBC · Ladies ·
+Home university" instead of `LOBCH`.
+
+Two things to know about the labels. `PWDR` and `DEFR` are shown as "PWD common
+reserved" and "Defence common reserved", which is what the legend at the foot of
+the official PDFs says they mean. The two orphan codes, `ORPHANI` and `ORPHANN`,
+are shown with their raw code appended, because the CET Cell legend does not say
+what the I and N stand for and guessing would be worse than showing the code.
+
+---
+
+## 8. Editing the college pages
 
 All 386 pages already exist and already show live cutoff tables pulled from the
 data. What they do not have is the human content: about, fees, placements,
@@ -162,9 +226,14 @@ If you ever regenerate the pages, `python3 tools/generate_college_pages.py`
 skips files that already exist, so your edits survive. Add `--force` only if you
 want to wipe them and start over.
 
+The pages themselves are deliberately thin — all the cutoff logic lives in
+`assets/college.js`. So if you want to change how the tables behave, edit that
+one file and every college page picks it up. You only need to regenerate the
+pages when the *markup* changes.
+
 ---
 
-## 7. Refreshing the data next year
+## 9. Refreshing the data next year
 
 When the CET Cell publishes the next season's PDFs:
 
@@ -174,7 +243,11 @@ python3 tools/extract.py                  # parses the PDFs
 python3 tools/build_data.py               # rebuilds meta.json + shards + csv
 python3 tools/generate_college_pages.py   # adds pages for any new colleges
 node tools/verify_matching.mjs            # sanity-checks the result
+node tools/test_college_page.mjs         # checks a college page end to end
 ```
+
+`build_data.py` writes the per-college files too, so new colleges get data
+automatically. Run `generate_college_pages.py` afterwards to give them a page.
 
 `extract.py` reads word coordinates rather than flat text, because a stage row
 can have a value under the seventh column and nothing before it. It reports how
@@ -182,7 +255,7 @@ many rows it found and how many it could not place — that number should be zer
 
 ---
 
-## 8. Notes on decisions you might want to revisit
+## 10. Notes on decisions you might want to revisit
 
 **Cutoffs are static JSON, not Supabase.** Supabase handles students, payments,
 analytics and access. The 88,343 cutoff rows sit in static files instead, sharded
@@ -206,7 +279,7 @@ and those are exactly the choices worth putting at the top of an option form.
 
 ---
 
-## 9. Data accuracy
+## 11. Data accuracy
 
 Extraction was validated against a raw count of every percentile figure printed
 in the three PDFs:
