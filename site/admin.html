@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#eef2f5">
+<script>try{var t=localStorage.getItem('cp_theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;}catch(e){}</script>
 <title>CutoffPath admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/style.css">
+<script src="/assets/theme.js" defer></script>
 <style>
   .shell { max-width: 940px; padding-bottom: 40px; }
   .bars { display: flex; align-items: flex-end; gap: 4px; height: 92px; margin: 6px 0 4px; }
@@ -29,6 +32,7 @@
   <header class="topbar">
     <div class="brandmark"><span class="glyph">CP</span><span>Admin<small>CutoffPath control room</small></span></div>
     <span class="spacer"></span>
+    <span class="pill" id="modePill" hidden>Paid</span>
     <button class="btn ghost slim" id="signOut" hidden>Sign out</button>
   </header>
 
@@ -48,6 +52,20 @@
 
   <!-- dashboard -->
   <section id="dashView" hidden>
+
+    <div class="card" id="modeCard">
+      <div class="card-head"><h2>Access mode</h2></div>
+      <p class="sub" style="margin-bottom:14px">
+        Paid mode shows the ₹49 wall before results. Free mode opens the finder to everyone —
+        useful during launch, exam-result week, or if payments go down.
+      </p>
+      <label class="switch" style="font-size:15px">
+        <input type="checkbox" id="freeToggle">
+        <span class="track"><span class="knob"></span></span>
+        <span id="modeText">Loading…</span>
+      </label>
+      <div class="notice" id="modeMsg" hidden style="margin-top:12px"></div>
+    </div>
 
     <div class="stat-grid wide" style="margin-bottom:14px" id="statGrid"></div>
 
@@ -135,7 +153,47 @@
     $('#loginView').hidden = true;
     $('#dashView').hidden = false;
     $('#signOut').hidden = false;
-    loadStats(); loadStudents(); loadEvents();
+    loadStats(); loadStudents(); loadEvents(); loadMode();
+  }
+
+  function paintMode(mode, warning) {
+    const free = mode === 'free';
+    $('#freeToggle').checked = free;
+    $('#modeText').textContent = free
+      ? 'Free for everyone — no payment required'
+      : 'Paid — students pay ₹49 to see results';
+    const pill = $('#modePill');
+    pill.hidden = false;
+    pill.textContent = free ? 'Free mode' : 'Paid mode';
+    pill.className = 'pill ' + (free ? 'paid' : '');
+    if (warning) {
+      $('#modeMsg').className = 'notice warn';
+      $('#modeMsg').textContent = warning;
+      $('#modeMsg').hidden = false;
+    }
+  }
+
+  async function loadMode() {
+    try {
+      const r = await call('getSettings');
+      paintMode(r.accessMode, r.warning);
+    } catch (e) { fail(e); }
+  }
+
+  async function setMode(free) {
+    const msg = $('#modeMsg'); msg.hidden = true;
+    try {
+      const r = await call('setAccessMode', { mode: free ? 'free' : 'paid' });
+      paintMode(r.accessMode);
+      msg.className = 'notice ok';
+      msg.textContent = r.accessMode === 'free'
+        ? 'The finder is now open to everyone. Students already in a session see it immediately on their next search.'
+        : 'The paywall is back on.';
+      msg.hidden = false;
+    } catch (e) {
+      msg.className = 'notice err'; msg.textContent = e.message; msg.hidden = false;
+      $('#freeToggle').checked = !free;
+    }
   }
 
   async function loadStats() {
@@ -237,6 +295,7 @@
     }
   });
 
+  $('#freeToggle').addEventListener('change', function () { setMode(this.checked); });
   $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
   let timer;
   $('#stuSearch').addEventListener('input', function () {
