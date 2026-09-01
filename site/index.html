@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CutoffPath — MHT-CET college finder for Maharashtra</title>
+<meta name="description" content="Enter your MHT-CET percentile and category to see which engineering colleges you can get, based on the official CAP Round I, II and III cutoffs for 2026-27.">
+<meta name="theme-color" content="#eef2f5">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brandmark">
+      <span class="glyph">CP</span>
+      <span>CutoffPath<small>MHT-CET 2026-27 · CAP I–III</small></span>
+    </div>
+    <span class="spacer"></span>
+    <span class="pill free" id="accessPill">Free preview</span>
+  </header>
+
+  <!-- ============================ TAB 1 : FINDER ============================ -->
+  <section id="tab-finder">
+
+    <div class="card" id="formCard">
+      <div class="card-head">
+        <h2>Find your colleges</h2>
+      </div>
+      <p class="sub" style="margin-bottom:16px">
+        Your result is matched against the official State CET Cell cutoff lists for CAP Round I, II and III.
+      </p>
+
+      <div class="field">
+        <label id="scoreLabel" for="score">Your CET percentile</label>
+        <div class="seg" style="margin-bottom:8px" role="group" aria-label="Score type">
+          <button type="button" data-mode="pct" aria-pressed="true">Percentile</button>
+          <button type="button" data-mode="rank" aria-pressed="false">Merit rank</button>
+        </div>
+        <input type="number" id="score" inputmode="decimal" step="0.0000001" min="0" max="100"
+               placeholder="e.g. 93.4521" autocomplete="off">
+        <p class="hint" id="scoreHint">Use the percentile printed on your CET scorecard — decimals matter.</p>
+      </div>
+
+      <div class="field">
+        <label for="category">Category</label>
+        <select id="category">
+          <option value="OPEN">Open / General</option>
+          <option value="SC">SC — Scheduled Caste</option>
+          <option value="ST">ST — Scheduled Tribe</option>
+          <option value="VJ">VJ / DT (NT-A)</option>
+          <option value="NT1">NT-B</option>
+          <option value="NT2">NT-C</option>
+          <option value="NT3">NT-D</option>
+          <option value="OBC">OBC</option>
+          <option value="SEBC">SEBC</option>
+        </select>
+        <p class="hint">Reserved-category students are also matched against Open seats automatically.</p>
+      </div>
+
+      <div class="field">
+        <label>Gender</label>
+        <div class="seg" role="group" aria-label="Gender">
+          <button type="button" data-gender="M" aria-pressed="true">Male</button>
+          <button type="button" data-gender="F" aria-pressed="false">Female</button>
+        </div>
+        <p class="hint" id="genderHint">Female candidates are matched against both general and ladies seats.</p>
+      </div>
+
+      <div class="field">
+        <label for="univ">Your home university</label>
+        <select id="univ">
+          <option value="">Not sure — show every seat type</option>
+        </select>
+        <p class="hint">Set by the district of your HSC school. It decides whether you get Home University seats.</p>
+      </div>
+
+      <div class="field">
+        <label>Branches you want</label>
+        <div class="chips" id="groupChips">
+          <button type="button" class="chip" data-group="0" aria-pressed="true">Technical (CS, IT, AI &amp; DS)</button>
+          <button type="button" class="chip" data-group="1" aria-pressed="false">Core (Mech, Civil, E&amp;TC…)</button>
+          <button type="button" class="chip" data-group="2" aria-pressed="false">Others</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="region">Region</label>
+        <select id="region"><option value="">All of Maharashtra</option></select>
+      </div>
+
+      <details class="field" style="margin-bottom:18px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--brand-2)">Special reservations (optional)</summary>
+        <div class="chips" id="specialChips" style="margin-top:10px">
+          <button type="button" class="chip" data-sp="EWS" aria-pressed="false">EWS</button>
+          <button type="button" class="chip" data-sp="TFWS" aria-pressed="false">TFWS</button>
+          <button type="button" class="chip" data-sp="PWD" aria-pressed="false">PWD</button>
+          <button type="button" class="chip" data-sp="DEF" aria-pressed="false">Defence</button>
+          <button type="button" class="chip" data-sp="ORPHAN" aria-pressed="false">Orphan</button>
+          <button type="button" class="chip" data-sp="MI" aria-pressed="false">Minority</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Only tick what you have a valid certificate for.</p>
+      </details>
+
+      <button class="btn" id="findBtn">Find my colleges</button>
+      <p class="hint" style="text-align:center;margin-top:10px" id="payHint">
+        ₹49 one-time. Unlimited searches after that.
+      </p>
+    </div>
+
+    <div id="resultsWrap" hidden>
+      <div class="card tight" id="summaryCard"></div>
+      <div class="row" style="margin-bottom:12px">
+        <select id="sortBy" aria-label="Sort results">
+          <option value="fit">Best colleges first</option>
+          <option value="safe">Safest first</option>
+          <option value="branch">Group by branch</option>
+        </select>
+        <button class="btn ghost slim" id="editSearch" style="flex:none">Edit search</button>
+      </div>
+      <div id="results"></div>
+      <button class="btn ghost" id="showMore" hidden>Show more results</button>
+    </div>
+
+    <div id="choiceWrap" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>My choice list</h2>
+          <span class="numtag" id="choiceCount"></span>
+        </div>
+        <p class="sub" style="margin-bottom:12px">Arrange in the order you would fill your CAP option form.</p>
+        <div id="choiceList"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="downloadPdf">Download PDF</button>
+          <button class="btn ghost" id="clearChoices" style="flex:none">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer">
+      Cutoffs are published by the State Common Entrance Test Cell, Government of Maharashtra.<br>
+      CutoffPath is an independent guidance tool and is not affiliated with the CET Cell.
+    </p>
+  </section>
+
+  <!-- ========================= TAB 2 : COLLEGE INFO ========================= -->
+  <section id="tab-colleges" hidden>
+    <div class="card tight">
+      <input type="text" id="collegeSearch" placeholder="Search by college name, city or code" autocomplete="off">
+      <div class="chips" style="margin-top:10px" id="regionChips"></div>
+    </div>
+    <div id="collegeList"></div>
+    <p class="footer" id="collegeCount"></p>
+  </section>
+
+  <!-- ============================ TAB 3 : HOSTEL ============================ -->
+  <section id="tab-hostel" hidden>
+    <div class="card" style="text-align:center;padding:38px 20px">
+      <div style="width:52px;height:52px;border-radius:15px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;margin:0 auto 14px">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5"/>
+        </svg>
+      </div>
+      <h2>Hostel finder is coming soon</h2>
+      <p class="sub" style="max-width:340px;margin:8px auto 0">
+        We are collecting verified hostel and PG listings near each college — rent, distance, mess, and room type.
+        It will appear here once the first city is ready.
+      </p>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:8px">Want to be told when it opens?</h3>
+      <p class="hint" style="margin-bottom:12px">We will use the email you paid with. No spam.</p>
+      <button class="btn ghost" id="notifyHostel">Notify me</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============================== BOTTOM NAV ============================== -->
+<nav class="nav" role="tablist" aria-label="Sections">
+  <div class="nav-inner">
+    <button role="tab" aria-selected="true" data-tab="finder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      Finder
+    </button>
+    <button role="tab" aria-selected="false" data-tab="colleges">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M12 3 3 8h18l-9-5Z"/><path d="M5 21V11m4.5 10V11m5 10V11M19 21V11"/></svg>
+      Colleges
+    </button>
+    <button role="tab" aria-selected="false" data-tab="hostel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5"/></svg>
+      Hostel
+    </button>
+  </div>
+</nav>
+
+<!-- ============================== PAY SHEET ============================== -->
+<div class="scrim" id="paySheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="payTitle">
+    <div class="grip"></div>
+    <h2 id="payTitle">Unlock your college list</h2>
+    <p class="sub">One payment. Search as many times as you want, all season.</p>
+
+    <div class="price">
+      <span class="amt">₹49</span>
+      <span class="note">one-time · no renewal</span>
+    </div>
+
+    <ul class="ticklist">
+      <li>Every college and branch you are eligible for, across CAP I, II and III</li>
+      <li>The exact round each seat closed in, with rank and percentile</li>
+      <li>Build a choice list and download it as a PDF</li>
+      <li>Restore access on any device with your email and phone</li>
+    </ul>
+
+    <div class="field"><label for="payName">Full name</label>
+      <input type="text" id="payName" placeholder="As on your CET form" autocomplete="name"></div>
+    <div class="field"><label for="payEmail">Email</label>
+      <input type="email" id="payEmail" placeholder="you@example.com" autocomplete="email" inputmode="email"></div>
+    <div class="field"><label for="payPhone">Phone</label>
+      <input type="tel" id="payPhone" placeholder="10-digit mobile number" autocomplete="tel" inputmode="numeric" maxlength="10"></div>
+    <p class="hint" style="margin:-6px 0 14px">Keep these safe — they are how you restore access later.</p>
+
+    <div id="payError" class="notice err" hidden></div>
+
+    <button class="btn" id="payBtn">Pay ₹49 and see my colleges</button>
+    <button class="btn link" id="restoreOpen" style="display:block;margin:10px auto 0">Already paid? Restore access</button>
+    <button class="btn link" id="payClose" style="display:block;margin:2px auto 0;color:var(--ink-3)">Not now</button>
+  </div>
+</div>
+
+<!-- ============================ RESTORE SHEET ============================ -->
+<div class="scrim" id="restoreSheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="resTitle">
+    <div class="grip"></div>
+    <h2 id="resTitle">Restore your access</h2>
+    <p class="sub">Enter the email and phone you used while paying.</p>
+    <div class="field" style="margin-top:16px"><label for="resEmail">Email</label>
+      <input type="email" id="resEmail" autocomplete="email" inputmode="email"></div>
+    <div class="field"><label for="resPhone">Phone</label>
+      <input type="tel" id="resPhone" autocomplete="tel" inputmode="numeric" maxlength="10"></div>
+    <div id="resError" class="notice err" hidden></div>
+    <button class="btn" id="restoreBtn">Restore access</button>
+    <button class="btn link" id="restoreClose" style="display:block;margin:8px auto 0;color:var(--ink-3)">Cancel</button>
+  </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
+<script src="/assets/app.js" defer></script>
+</body>
+</html>
