@@ -1,10 +1,17 @@
 import {
-  json, readBody, hasSupabase, sbSelect, sbInsert, sbUpdate, sb,
+  json, readBody, hasSupabase, hasRazorpay, sbSelect, sbInsert, sbUpdate, sb,
   newToken, normEmail, normPhone, signAdminToken, verifyAdminToken,
-  ADMIN_PASSWORD
+  ADMIN_PASSWORD, SUPABASE_URL, SUPABASE_KEY, RZP_KEY_ID, PRICE_PAISE
 } from './_lib.js';
 
 const HEAD = { Prefer: 'count=exact', Range: '0-0' };
+
+/* Decodes only the middle segment of a JWT so we can tell an anon key from a
+   service_role key. No signature check, no secret ever leaves the function. */
+function decodeJwt(t) {
+  try { return Buffer.from(String(t).split('.')[1], 'base64').toString('utf8'); }
+  catch (e) { return ''; }
+}
 
 async function countRows(table, filter) {
   const q = `select=id${filter ? '&' + filter : ''}`;
@@ -86,7 +93,48 @@ export default async function handler(req, res) {
 
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || b.token;
   if (!verifyAdminToken(token)) return json(res, 401, { error: 'Session expired — sign in again' });
-  if (!hasSupabase()) return json(res, 501, { error: 'Database is not configured' });
+
+  /* Reports which variables the running function can actually see. Never
+     returns a secret — only whether it is present, its length, and a shape
+     hint, which is enough to spot a missing, misnamed or truncated value. */
+  if (action === 'health') {
+    const shape = (v, want) => !v ? 'missing'
+      : (v.trim() !== v ? 'has stray whitespace'
+      : (/^["'].*["']$/.test(v) ? 'wrapped in quotes — remove them'
+      : (want && !want.test(v) ? 'unexpected format' : 'looks right')));
+    let dbPing = 'not attempted';
+    if (hasSupabase()) {
+      try {
+        await sbSelect('settings', 'select=key&limit=1');
+        dbPing = 'connected';
+      } catch (e) {
+        dbPing = 'reachable but failed: ' + (e.message || 'unknown')
+          + (e.status ? ' (HTTP ' + e.status + ')' : '');
+      }
+    }
+    return json(res, 200, {
+      SUPABASE_URL: {
+        present: Boolean(SUPABASE_URL), length: SUPABASE_URL.length,
+        note: shape(SUPABASE_URL, /^https:\/\/[a-z0-9-]+\.supabase\.co$/)
+      },
+      SUPABASE_SERVICE_ROLE_KEY: {
+        present: Boolean(SUPABASE_KEY), length: SUPABASE_KEY.length,
+        note: shape(SUPABASE_KEY),
+        looksLikeAnonKey: /"role":"anon"/.test(decodeJwt(SUPABASE_KEY)),
+        looksLikeServiceRole: /"role":"service_role"/.test(decodeJwt(SUPABASE_KEY))
+      },
+      RAZORPAY_KEY_ID: { present: Boolean(RZP_KEY_ID), mode: RZP_KEY_ID.startsWith('rzp_live') ? 'live' : (RZP_KEY_ID.startsWith('rzp_test') ? 'test' : 'unset') },
+      RAZORPAY_KEY_SECRET: { present: hasRazorpay() },
+      PRICE_PAISE,
+      database: dbPing
+    });
+  }
+
+  if (!hasSupabase()) {
+    return json(res, 501, {
+      error: 'Database is not configured — SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is empty in this deployment. Run the health check for details.'
+    });
+  }
 
   try {
     switch (action) {
