@@ -21,6 +21,8 @@
     specials: new Set(),
     token: localStorage.getItem(LS.token) || '',
     access: false,
+    freeMode: false,
+    pricePaise: 4900,
     student: null,
     results: [],
     shown: 0,
@@ -408,20 +410,40 @@
   }
 
   /* ------------------------------------------------------------ ACCESS -- */
+  function unlocked() { return state.access || state.freeMode; }
+
   function setAccess(on, name) {
     state.access = on;
     state.profileName = name || state.profileName;
     const pill = $('#accessPill');
-    pill.textContent = on ? 'Full access' : 'Free preview';
-    pill.className = 'pill ' + (on ? 'paid' : 'free');
-    $('#payHint').hidden = on;
+    if (state.freeMode && !on) {
+      pill.textContent = 'Free for everyone';
+      pill.className = 'pill paid';
+    } else {
+      pill.textContent = on ? 'Full access' : 'Free preview';
+      pill.className = 'pill ' + (on ? 'paid' : 'free');
+    }
+    $('#payHint').hidden = unlocked();
     $('#findBtn').textContent = 'Find my colleges';
   }
 
+  function priceText() {
+    const rupees = Math.round((state.pricePaise || 4900) / 100);
+    return '\u20B9' + rupees;
+  }
+
   async function checkAccess() {
-    if (!state.token) return setAccess(false);
     try {
-      const r = await api('me?token=' + encodeURIComponent(state.token));
+      const q = state.token ? '?token=' + encodeURIComponent(state.token) : '';
+      const r = await api('me' + q);
+      state.freeMode = !!r.freeMode;
+      if (r.pricePaise) {
+        state.pricePaise = r.pricePaise;
+        $('#payHint').textContent = priceText() + ' one-time. Unlimited searches after that.';
+        $('#payBtn').textContent = 'Pay ' + priceText() + ' and see my colleges';
+        const amt = document.querySelector('.price .amt');
+        if (amt) amt.textContent = priceText();
+      }
       setAccess(!!r.access, r.name);
     } catch (e) { setAccess(false); }
   }
@@ -477,7 +499,7 @@
         category: p.category, gender: p.gender, results: list.length
       });
 
-      if (!state.access) {
+      if (!unlocked()) {
         $('#payTitle').textContent = list.length
           ? `We found ${list.length} colleges for you`
           : 'Unlock your college list';
@@ -590,13 +612,13 @@
             err.hidden = false;
           } finally {
             btn.disabled = false;
-            btn.textContent = 'Pay ₹49 and see my colleges';
+            btn.textContent = 'Pay ' + priceText() + ' and see my colleges';
           }
         },
         modal: {
           ondismiss: function () {
             btn.disabled = false;
-            btn.textContent = 'Pay ₹49 and see my colleges';
+            btn.textContent = 'Pay ' + priceText() + ' and see my colleges';
             track('pay_cancel', {});
           }
         }
@@ -612,7 +634,7 @@
         : (e.message || 'Could not start the payment. Try again.');
       err.hidden = false;
       btn.disabled = false;
-      btn.textContent = 'Pay ₹49 and see my colleges';
+      btn.textContent = 'Pay ' + priceText() + ' and see my colleges';
     }
   }
 
@@ -789,7 +811,7 @@
         }
         return;
       case 'notifyHostel':
-        t.textContent = state.access ? 'You are on the list' : 'Pay first, then we will have your email';
+        t.textContent = state.access ? 'You are on the list' : 'Sign up when you unlock the finder';
         t.disabled = true;
         track('hostel_notify', {});
         return;
