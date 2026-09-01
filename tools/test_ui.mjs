@@ -29,7 +29,7 @@ window.fetch = async (url, opts) => {
   if (u.startsWith('/api/')) {
     apiCalls.push(u.split('?')[0]);
     if (u.startsWith('/api/me')) {
-      return resp(200, { access: false });
+      return resp(200, { access: false, freeMode: false, pricePaise: 4900 });
     }
     return resp(200, { ok: true });
   }
@@ -112,7 +112,7 @@ const run = async () => {
   window.localStorage.setItem('cp_token', 'test-token');
   window.fetch = (u, o) => {
     const s = String(u);
-    if (s.startsWith('/api/me')) return resp(200, { access: true, name: 'Test Student' });
+    if (s.startsWith('/api/me')) return resp(200, { access: true, name: 'Test Student', freeMode: false, pricePaise: 4900 });
     if (s.startsWith('/api/')) return resp(200, { ok: true });
     const f = path.join(ROOT, s.split('?')[0]);
     return fs.existsSync(f) ? resp(200, JSON.parse(fs.readFileSync(f, 'utf8'))) : resp(404, {});
@@ -207,6 +207,79 @@ const run = async () => {
 
   console.log('\n9. Search restored from last session');
   check('last search saved', JSON.parse(w2.localStorage.getItem('cp_last_search')).value === 93.4);
+
+  console.log('\n10. Dark / light mode');
+  const themeSrc = fs.readFileSync(path.join(ROOT, 'assets/theme.js'), 'utf8');
+  w2.eval(themeSrc);
+  await sleep(80);
+  const tbtn = w2.document.querySelector('.themebtn');
+  check('theme button mounted in the top bar', !!tbtn);
+  const themeBefore = w2.document.documentElement.dataset.theme;
+  clk(tbtn);
+  await sleep(50);
+  check('clicking flips the theme', w2.document.documentElement.dataset.theme !== themeBefore,
+    themeBefore + ' -> ' + w2.document.documentElement.dataset.theme);
+  check('choice is persisted', w2.localStorage.getItem('cp_theme') === w2.document.documentElement.dataset.theme);
+  check('meta theme-color follows', w2.document.querySelector('meta[name=theme-color]').getAttribute('content')
+    === (w2.document.documentElement.dataset.theme === 'dark' ? '#0e1620' : '#eef2f5'));
+  clk(tbtn);
+  await sleep(50);
+  check('flips back', w2.document.documentElement.dataset.theme === themeBefore);
+  const css = fs.readFileSync(path.join(ROOT, 'assets/style.css'), 'utf8');
+  check('dark tokens defined in css', css.includes('[data-theme="dark"]'));
+  check('index.html sets theme before paint',
+    fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').includes("documentElement.dataset.theme"));
+  check('college pages set theme before paint',
+    fs.readFileSync(path.join(ROOT, 'colleges/16006.html'), 'utf8').includes("documentElement.dataset.theme"));
+  check('admin sets theme before paint',
+    fs.readFileSync(path.join(ROOT, 'admin.html'), 'utf8').includes("documentElement.dataset.theme"));
+
+  console.log('\n11. Free mode (owner switched the paywall off)');
+  const dom3 = new JSDOM(html, { url: 'https://cutoffpath.test/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc });
+  const w3 = dom3.window;
+  w3.fetch = (u) => {
+    const str = String(u);
+    if (str.startsWith('/api/me')) return resp(200, { access: false, freeMode: true, pricePaise: 4900 });
+    if (str.startsWith('/api/')) return resp(200, { ok: true });
+    const f = path.join(ROOT, str.split('?')[0]);
+    return fs.existsSync(f) ? resp(200, JSON.parse(fs.readFileSync(f, 'utf8'))) : resp(404, {});
+  };
+  w3.navigator.sendBeacon = () => true;
+  w3.scrollTo = () => {};
+  w3.HTMLElement.prototype.scrollIntoView = () => {};
+  w3.eval(fs.readFileSync(path.join(ROOT, 'assets/app.js'), 'utf8'));
+  await sleep(500);
+  const q3 = s2 => w3.document.querySelector(s2);
+  check('pill reads free for everyone', /free for everyone/i.test(q3('#accessPill').textContent),
+    q3('#accessPill').textContent);
+  check('price hint hidden in free mode', q3('#payHint').hidden);
+  q3('#score').value = '93.4';
+  q3('#findBtn').dispatchEvent(new w3.MouseEvent('click', { bubbles: true }));
+  await sleep(1200);
+  check('no paywall in free mode', q3('#paySheet').hidden);
+  check('results shown straight away', !q3('#resultsWrap').hidden);
+  check('result cards rendered without paying', w3.document.querySelectorAll('.result').length > 0);
+
+  console.log('\n12. Price comes from the server');
+  const dom4 = new JSDOM(html, { url: 'https://cutoffpath.test/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc });
+  const w4 = dom4.window;
+  w4.fetch = (u) => {
+    const str = String(u);
+    if (str.startsWith('/api/me')) return resp(200, { access: false, freeMode: false, pricePaise: 9900 });
+    if (str.startsWith('/api/')) return resp(200, { ok: true });
+    const f = path.join(ROOT, str.split('?')[0]);
+    return fs.existsSync(f) ? resp(200, JSON.parse(fs.readFileSync(f, 'utf8'))) : resp(404, {});
+  };
+  w4.navigator.sendBeacon = () => true;
+  w4.scrollTo = () => {};
+  w4.HTMLElement.prototype.scrollIntoView = () => {};
+  w4.eval(fs.readFileSync(path.join(ROOT, 'assets/app.js'), 'utf8'));
+  await sleep(400);
+  check('PRICE_PAISE=9900 renders as Rs 99',
+    w4.document.querySelector('.price .amt').textContent === '\u20B999',
+    w4.document.querySelector('.price .amt').textContent);
+  check('pay button uses the same price',
+    w4.document.querySelector('#payBtn').textContent.includes('\u20B999'));
 
   console.log('\n' + (problems.length ? `${problems.length} PROBLEM(S):\n - ` + problems.join('\n - ')
     : 'All UI checks passed.'));

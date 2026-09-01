@@ -132,6 +132,18 @@ os.makedirs(os.path.join(DATA, 'shards'), exist_ok=True)
 for k, v in shards.items():
     json.dump(v, open(os.path.join(DATA, 'shards', k + '.json'), 'w'), separators=(',', ':'))
 
+# One file per college, so a college page loads ~8 KB instead of the whole set.
+percollege = defaultdict(list)
+for r in rows:
+    percollege[r[0]].append(r[1:])
+cdir = os.path.join(DATA, 'colleges')
+os.makedirs(cdir, exist_ok=True)
+for ci, rs in percollege.items():
+    rs.sort(key=lambda x: (x[0], x[2], x[3]))
+    json.dump(rs, open(os.path.join(cdir, college_codes[ci] + '.json'), 'w'),
+              separators=(',', ':'))
+print('per-college files', len(percollege))
+
 # CSV for optional Supabase import
 with open(os.path.join(ROOT, 'supabase', 'cutoffs.csv'), 'w') as f:
     f.write('college_code,college_name,status,home_university,region,course_code,branch,branch_group,seat_type,cap_round,closing_rank,closing_percentile\n')

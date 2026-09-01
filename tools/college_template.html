@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__NAME__ — cutoffs and details | CutoffPath</title>
 <meta name="description" content="__NAME__ (__CODE__), __REGION__. MHT-CET CAP Round I–III closing percentiles, branches offered, fees, placements and hostel details.">
+<meta name="theme-color" content="#eef2f5">
+<script>try{var t=localStorage.getItem('cp_theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -37,19 +39,30 @@
     <p class="sub">Write two or three sentences here: when it was founded, what it is known for, campus size, accreditation (NBA / NAAC), and anything a student should weigh before putting it high in their option form.</p>
   </div>
 
-  <!-- ==================== live cutoff snapshot ==================== -->
+  <!-- ==================== live cutoff tables ==================== -->
   <div class="card">
     <div class="card-head">
       <h2>Closing cutoffs</h2>
-      <span class="numtag" id="seatLabel">Open · State level</span>
     </div>
-    <p class="sub" style="margin-bottom:10px">Lowest percentile that got a seat in each CAP round, 2026-27.</p>
-    <div class="seg" id="seatToggle" style="margin-bottom:12px" role="group" aria-label="Seat type">
-      <button type="button" data-seat="GOPENS" aria-pressed="true">Open (state)</button>
-      <button type="button" data-seat="GOPENH" aria-pressed="false">Open (home univ.)</button>
-      <button type="button" data-seat="LOPENS" aria-pressed="false">Ladies (state)</button>
+    <p class="sub" style="margin-bottom:12px">
+      The last percentile that got a seat in each CAP round, 2026-27. Pick your category to see
+      the numbers that apply to you.
+    </p>
+
+    <div class="row" style="margin-bottom:10px">
+      <select id="branchPick" aria-label="Branch"><option>Loading…</option></select>
+      <select id="seatPick" aria-label="Category"><option>Loading…</option></select>
     </div>
-    <div class="tablewrap"><table class="data" id="cutTable"><tbody><tr><td class="hint">Loading cutoffs…</td></tr></tbody></table></div>
+
+    <label class="switch" style="margin-bottom:12px">
+      <input type="checkbox" id="showRank"><span class="track"><span class="knob"></span></span>
+      <span>Show merit rank instead of percentile</span>
+    </label>
+
+    <div class="tablewrap">
+      <table class="data" id="cutTable"><tbody><tr><td class="hint">Loading cutoffs…</td></tr></tbody></table>
+    </div>
+    <p class="hint" id="cutCaption" style="margin-top:10px"></p>
   </div>
 
   <!-- ==================== EDIT: fees ==================== -->
@@ -103,74 +116,7 @@
   </p>
 </div>
 
-<script>
-(function () {
-  const code = document.body.dataset.code;
-  let seat = 'GOPENS';
-  let meta = null, rows = null;
-
-  const esc = s => String(s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-  async function load() {
-    const [m, r] = await Promise.all([
-      fetch('/data/meta.json').then(x => x.json()),
-      fetch('/data/shards/OPEN.json').then(x => x.json())
-    ]);
-    meta = m;
-    const ci = m.colleges.findIndex(c => c[0] === code);
-    rows = r.filter(row => row[0] === ci);
-    render();
-  }
-
-  function render() {
-    const si = meta.seats.indexOf(seat);
-    const byBranch = new Map();
-    rows.filter(r => r[3] === si).forEach(r => {
-      const name = meta.branches[r[1]];
-      if (!byBranch.has(name)) byBranch.set(name, {});
-      const e = byBranch.get(name);
-      if (!e[r[4]] || r[6] < e[r[4]].pct) e[r[4]] = { pct: r[6], rank: r[5] };
-    });
-
-    const table = document.getElementById('cutTable');
-    if (!byBranch.size) {
-      table.innerHTML = '<tbody><tr><td class="hint">No seats were allotted in this seat type. Try another one above.</td></tr></tbody>';
-      return;
-    }
-    const list = Array.from(byBranch.entries())
-      .sort((a, b) => (b[1][1] || b[1][2] || b[1][3]).pct - (a[1][1] || a[1][2] || a[1][3]).pct);
-
-    table.innerHTML =
-      '<thead><tr><th>Branch</th><th>CAP I</th><th>CAP II</th><th>CAP III</th></tr></thead><tbody>' +
-      list.map(([name, r]) => `<tr>
-        <td style="white-space:normal;min-width:190px">${esc(name)}</td>
-        <td>${r[1] ? r[1].pct.toFixed(3) : '—'}</td>
-        <td>${r[2] ? r[2].pct.toFixed(3) : '—'}</td>
-        <td>${r[3] ? r[3].pct.toFixed(3) : '—'}</td></tr>`).join('') +
-      '</tbody>';
-  }
-
-  document.getElementById('seatToggle').addEventListener('click', e => {
-    const b = e.target.closest('button[data-seat]');
-    if (!b) return;
-    seat = b.dataset.seat;
-    document.querySelectorAll('#seatToggle button').forEach(x =>
-      x.setAttribute('aria-pressed', x === b));
-    document.getElementById('seatLabel').textContent = b.textContent.trim();
-    if (rows) render();
-  });
-
-  load().catch(() => {
-    document.getElementById('cutTable').innerHTML =
-      '<tbody><tr><td class="hint">Cutoffs could not load. Refresh the page.</td></tr></tbody>';
-  });
-
-  fetch('/api/track', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'college_view', token: localStorage.getItem('cp_token') || '', meta: { code } })
-  }).catch(() => {});
-})();
-</script>
+<script src="/assets/theme.js" defer></script>
+<script src="/assets/college.js" defer></script>
 </body>
 </html>
