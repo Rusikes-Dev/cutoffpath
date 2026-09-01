@@ -65,6 +65,8 @@
         <span id="modeText">Loading…</span>
       </label>
       <div class="notice" id="modeMsg" hidden style="margin-top:12px"></div>
+      <button class="btn link" id="healthBtn" style="margin-top:6px">Run connection check</button>
+      <div id="healthOut" hidden style="margin-top:10px"></div>
     </div>
 
     <div class="stat-grid wide" style="margin-bottom:14px" id="statGrid"></div>
@@ -173,6 +175,35 @@
     }
   }
 
+  function row(label, ok, detail) {
+    return '<div class="adminrow" style="justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)">' +
+      '<b style="font-weight:600">' + esc(label) + '</b>' +
+      '<span class="tag ' + (ok ? 'yes' : 'no') + '">' + esc(detail) + '</span></div>';
+  }
+
+  async function health() {
+    const out = $('#healthOut');
+    out.hidden = false;
+    out.innerHTML = '<p class="hint">Checking…</p>';
+    try {
+      const h = await call('health');
+      let html = '';
+      html += row('SUPABASE_URL', h.SUPABASE_URL.present, h.SUPABASE_URL.note);
+      html += row('SUPABASE_SERVICE_ROLE_KEY',
+        h.SUPABASE_SERVICE_ROLE_KEY.present && h.SUPABASE_SERVICE_ROLE_KEY.looksLikeServiceRole,
+        !h.SUPABASE_SERVICE_ROLE_KEY.present ? 'missing'
+          : h.SUPABASE_SERVICE_ROLE_KEY.looksLikeAnonKey ? 'this is the anon key'
+          : h.SUPABASE_SERVICE_ROLE_KEY.looksLikeServiceRole ? 'service_role, correct'
+          : h.SUPABASE_SERVICE_ROLE_KEY.note);
+      html += row('Database', h.database === 'connected', h.database);
+      html += row('Razorpay keys', h.RAZORPAY_KEY_SECRET.present, h.RAZORPAY_KEY_ID.mode + ' mode');
+      html += row('Price', true, '\u20B9' + Math.round(h.PRICE_PAISE / 100));
+      out.innerHTML = html;
+    } catch (e) {
+      out.innerHTML = '<div class="notice err">' + esc(e.message) + '</div>';
+    }
+  }
+
   async function loadMode() {
     try {
       const r = await call('getSettings');
@@ -270,6 +301,7 @@
     const t = ev.target.closest('button');
     if (!t) return;
     if (t.id === 'loginBtn') return login();
+    if (t.id === 'healthBtn') return health();
     if (t.id === 'signOut') { sessionStorage.removeItem('cp_admin'); location.reload(); return; }
     if (t.id === 'nextPage') { page++; return loadStudents(); }
     if (t.id === 'prevPage') { page = Math.max(0, page - 1); return loadStudents(); }
