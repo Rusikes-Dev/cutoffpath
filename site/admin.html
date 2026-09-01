@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>CutoffPath admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .shell { max-width: 940px; padding-bottom: 40px; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 92px; margin: 6px 0 4px; }
+  .bars div { flex: 1; background: var(--brand-soft); border-radius: 3px 3px 0 0; position: relative; min-height: 2px; }
+  .bars div i { position: absolute; inset: auto 0 0 0; background: var(--brand); border-radius: 3px 3px 0 0; }
+  .axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--ink-3); }
+  .stat-grid.wide { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .adminrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+  .tag.yes { background: var(--safe-soft); color: var(--safe); }
+  .tag.no { background: #f0f2f4; color: var(--ink-3); }
+  .tag.admin { background: var(--reach-soft); color: var(--reach); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brandmark"><span class="glyph">CP</span><span>Admin<small>CutoffPath control room</small></span></div>
+    <span class="spacer"></span>
+    <button class="btn ghost slim" id="signOut" hidden>Sign out</button>
+  </header>
+
+  <!-- login -->
+  <section id="loginView">
+    <div class="card" style="max-width:420px;margin:40px auto">
+      <h2>Sign in</h2>
+      <p class="sub" style="margin-bottom:16px">This panel is for the site owner.</p>
+      <div class="field">
+        <label for="pw">Admin password</label>
+        <input type="password" id="pw" autocomplete="current-password">
+      </div>
+      <div class="notice err" id="loginErr" hidden></div>
+      <button class="btn" id="loginBtn">Sign in</button>
+    </div>
+  </section>
+
+  <!-- dashboard -->
+  <section id="dashView" hidden>
+
+    <div class="stat-grid wide" style="margin-bottom:14px" id="statGrid"></div>
+
+    <div class="card">
+      <div class="card-head"><h2>Last 14 days</h2><span class="numtag" id="seriesNote"></span></div>
+      <div class="bars" id="bars"></div>
+      <div class="axis" id="axis"></div>
+      <p class="hint" style="margin-top:8px">Bar height is daily visits. The solid part is searches run that day.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Give a student access</h2></div>
+      <p class="sub" style="margin-bottom:14px">Use this for offline payments, refunds, or testing. They restore it with the same email and phone.</p>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="gName" placeholder="Name">
+        <input type="email" id="gEmail" placeholder="Email">
+      </div>
+      <div class="row">
+        <input type="tel" id="gPhone" placeholder="10-digit phone" maxlength="10">
+        <button class="btn" id="grantBtn" style="flex:none">Grant access</button>
+      </div>
+      <div class="notice" id="grantMsg" hidden style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Students</h2><span class="numtag" id="stuCount"></span></div>
+      <input type="text" id="stuSearch" placeholder="Search name, email or phone" style="margin-bottom:12px">
+      <div id="students"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn ghost slim" id="prevPage">Previous</button>
+        <button class="btn ghost slim" id="nextPage">Next</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>What people search for</h2></div>
+      <div id="topSearches"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Recent activity</h2></div>
+      <div class="tablewrap"><table class="data" id="eventsTable"></table></div>
+    </div>
+
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  let token = sessionStorage.getItem('cp_admin') || '';
+  let page = 0, q = '';
+
+  async function call(action, body) {
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(Object.assign({ action }, body || {}))
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || 'Request failed'); e.status = res.status; throw e; }
+    return data;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  async function login() {
+    const err = $('#loginErr'); err.hidden = true;
+    const btn = $('#loginBtn'); btn.disabled = true; btn.textContent = 'Checking…';
+    try {
+      const r = await call('login', { password: $('#pw').value });
+      token = r.token;
+      sessionStorage.setItem('cp_admin', token);
+      show();
+    } catch (e) {
+      err.textContent = e.message; err.hidden = false;
+    } finally { btn.disabled = false; btn.textContent = 'Sign in'; }
+  }
+
+  function show() {
+    $('#loginView').hidden = true;
+    $('#dashView').hidden = false;
+    $('#signOut').hidden = false;
+    loadStats(); loadStudents(); loadEvents();
+  }
+
+  async function loadStats() {
+    try {
+      const { stats, series, top } = await call('stats');
+      const cards = [
+        ['₹' + stats.revenueRupees.toLocaleString('en-IN'), 'Revenue'],
+        [stats.paid, 'Paid students'],
+        [stats.granted, 'Manual access'],
+        [stats.visits, 'Visits'],
+        [stats.searches, 'Searches run'],
+        [stats.conversion + '%', 'Paywall → paid'],
+        [stats.pdfs, 'PDFs downloaded'],
+        [stats.orders, 'Orders created']
+      ];
+      $('#statGrid').innerHTML = cards.map(([n, l]) =>
+        `<div class="stat"><span class="n">${esc(n)}</span><span class="l">${esc(l)}</span></div>`).join('');
+
+      const max = Math.max(1, ...series.map(d => d.visits));
+      $('#bars').innerHTML = series.map(d =>
+        `<div style="height:${Math.max(2, (d.visits / max) * 100)}%" title="${d.date}: ${d.visits} visits, ${d.searches} searches, ${d.paid} paid">
+           <i style="height:${d.visits ? (d.searches / Math.max(d.visits, d.searches)) * 100 : 0}%"></i></div>`).join('');
+      $('#axis').innerHTML = `<span>${series[0].date.slice(5)}</span><span>${series[series.length - 1].date.slice(5)}</span>`;
+      $('#seriesNote').textContent = series.reduce((t, d) => t + d.visits, 0) + ' visits';
+
+      const rows = arr => arr.map(([k, v]) =>
+        `<div class="adminrow" style="justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)">
+           <b style="font-weight:600">${esc(k)}</b><span class="numtag">${v}</span></div>`).join('');
+      $('#topSearches').innerHTML =
+        '<h3 style="font-size:13px;margin-bottom:4px">By category</h3>' + (rows(top.categories) || '<p class="hint">No searches yet.</p>') +
+        '<h3 style="font-size:13px;margin:14px 0 4px">By gender</h3>' + (rows(top.genders) || '<p class="hint">No searches yet.</p>');
+    } catch (e) { fail(e); }
+  }
+
+  async function loadStudents() {
+    try {
+      const r = await call('students', { q, page });
+      $('#stuCount').textContent = (r.total || 0) + ' total';
+      $('#students').innerHTML = (r.students || []).map(s => `
+        <div class="choice" style="align-items:flex-start">
+          <div class="body">
+            <b>${esc(s.name)} ${s.access ? '<span class="tag yes">access</span>' : '<span class="tag no">no access</span>'}
+              ${s.source === 'admin' ? '<span class="tag admin">manual</span>' : ''}</b>
+            <span>${esc(s.email)} · ${esc(s.phone)} · ${new Date(s.created_at).toLocaleDateString('en-IN')}
+              ${s.amount_paise ? ' · ₹' + (s.amount_paise / 100) : ''}</span>
+          </div>
+          <button class="btn ghost slim" data-toggle="${s.id}" data-access="${s.access ? 0 : 1}">
+            ${s.access ? 'Revoke' : 'Grant'}</button>
+        </div>`).join('') || '<p class="hint">No students yet.</p>';
+    } catch (e) { fail(e); }
+  }
+
+  async function loadEvents() {
+    try {
+      const { events } = await call('recentEvents');
+      $('#eventsTable').innerHTML =
+        '<thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead><tbody>' +
+        events.map(e => `<tr>
+          <td>${new Date(e.created_at).toLocaleString('en-IN')}</td>
+          <td>${esc(e.type)}</td>
+          <td>${esc(JSON.stringify(e.meta || {}).slice(0, 90))}</td></tr>`).join('') +
+        '</tbody>';
+    } catch (e) { fail(e); }
+  }
+
+  function fail(e) {
+    if (e.status === 401) {
+      sessionStorage.removeItem('cp_admin');
+      $('#dashView').hidden = true; $('#loginView').hidden = false; $('#signOut').hidden = true;
+    }
+  }
+
+  document.addEventListener('click', async function (ev) {
+    const t = ev.target.closest('button');
+    if (!t) return;
+    if (t.id === 'loginBtn') return login();
+    if (t.id === 'signOut') { sessionStorage.removeItem('cp_admin'); location.reload(); return; }
+    if (t.id === 'nextPage') { page++; return loadStudents(); }
+    if (t.id === 'prevPage') { page = Math.max(0, page - 1); return loadStudents(); }
+    if (t.id === 'grantBtn') {
+      const msg = $('#grantMsg'); msg.hidden = true;
+      try {
+        const r = await call('grant', {
+          name: $('#gName').value, email: $('#gEmail').value, phone: $('#gPhone').value
+        });
+        msg.className = 'notice ok';
+        msg.textContent = (r.created ? 'Access granted to ' : 'Access refreshed for ') + r.student.email;
+        msg.hidden = false;
+        $('#gName').value = $('#gEmail').value = $('#gPhone').value = '';
+        loadStudents(); loadStats();
+      } catch (e) {
+        msg.className = 'notice err'; msg.textContent = e.message; msg.hidden = false;
+      }
+      return;
+    }
+    if (t.dataset.toggle) {
+      await call('setAccess', { id: t.dataset.toggle, access: t.dataset.access === '1' });
+      loadStudents(); loadStats();
+    }
+  });
+
+  $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  let timer;
+  $('#stuSearch').addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(() => { q = this.value.trim(); page = 0; loadStudents(); }, 250);
+  });
+
+  if (token) show();
+})();
+</script>
+</body>
+</html>
