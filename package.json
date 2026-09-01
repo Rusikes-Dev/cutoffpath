@@ -1,0 +1,18 @@
+{
+  "name": "cutoffpath",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MHT-CET engineering college finder built on the official CAP Round I-III cutoffs",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
+    "colleges": "python3 tools/generate_college_pages.py"
+  },
+  "dependencies": {
+    "jsdom": "^30.0.1"
+  }
+}
