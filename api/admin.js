@@ -144,6 +144,26 @@ export default async function handler(req, res) {
         return json(res, 200, { ok: true });
       }
 
+      case 'getSettings': {
+        try {
+          const { data } = await sbSelect('settings', 'key=eq.access_mode&select=value&limit=1');
+          const v = data && data[0] && data[0].value;
+          return json(res, 200, { accessMode: v === 'free' ? 'free' : 'paid' });
+        } catch (e) {
+          return json(res, 200, { accessMode: 'paid', warning: 'settings table not found — run schema.sql' });
+        }
+      }
+
+      case 'setAccessMode': {
+        const mode = b.mode === 'free' ? 'free' : 'paid';
+        await sb('settings', {
+          method: 'POST',
+          body: JSON.stringify([{ key: 'access_mode', value: mode, updated_at: new Date().toISOString() }]),
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+        });
+        return json(res, 200, { accessMode: mode });
+      }
+
       case 'recentEvents': {
         const { data } = await sbSelect(
           'events', 'select=type,meta,created_at&order=created_at.desc&limit=60');
